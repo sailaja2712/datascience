@@ -1,0 +1,107 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from textblob import TextBlob
+from wordcloud import WordCloud
+import nltk
+import re
+
+# If nltk stopwords not downloaded yet, uncomment:
+# nltk.download('stopwords')
+# nltk.download('punkt')
+
+from nltk.corpus import stopwords
+
+# Sample data: simulate social media posts with timestamps
+data = {
+    'timestamp': [
+        '2025-09-01 08:30', '2025-09-01 09:00', '2025-09-01 10:15',
+        '2025-09-02 11:00', '2025-09-02 12:30', '2025-09-03 14:45',
+        '2025-09-03 15:00', '2025-09-04 16:20', '2025-09-04 17:30',
+        '2025-09-05 18:00'
+    ],
+    'text': [
+        "I love the new product! It's amazing and works perfectly.",
+        "The latest update is terrible, I hate the new interface.",
+        "Customer service was very helpful and friendly.",
+        "Worst experience ever. Totally disappointed.",
+        "Feeling great about the recent changes in the company.",
+        "Not happy with the product quality, very poor performance.",
+        "The brand has improved a lot recently, nice job!",
+        "Absolutely love this! Highly recommend it to everyone.",
+        "Terrible customer support, took too long to respond.",
+        "Satisfied with the product but could be better."
+    ]
+}
+
+df = pd.DataFrame(data)
+df['timestamp'] = pd.to_datetime(df['timestamp'])
+
+# Step 1: Clean text function
+def clean_text(text):
+    text = text.lower()
+    text = re.sub(r"http\S+|www\S+|https\S+", '', text, flags=re.MULTILINE)
+    text = re.sub(r'\@w+|\#','', text)
+    text = re.sub(r'[^a-zA-Z\s]', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+df['clean_text'] = df['text'].apply(clean_text)
+
+# Step 2: Sentiment Analysis with TextBlob
+def get_sentiment(text):
+    blob = TextBlob(text)
+    return blob.sentiment.polarity
+
+df['sentiment'] = df['clean_text'].apply(get_sentiment)
+
+# Classify sentiment
+def sentiment_label(score):
+    if score > 0.1:
+        return 'Positive'
+    elif score < -0.1:
+        return 'Negative'
+    else:
+        return 'Neutral'
+
+df['sentiment_label'] = df['sentiment'].apply(sentiment_label)
+
+print(df[['text', 'sentiment', 'sentiment_label']])
+
+# Step 3: Visualizations
+
+# 1. Sentiment Distribution
+plt.figure(figsize=(8,5))
+sns.countplot(x='sentiment_label', data=df, palette='coolwarm')
+plt.title("Sentiment Distribution")
+plt.show()
+
+# 2. Sentiment Over Time
+df.set_index('timestamp', inplace=True)
+daily_sentiment = df.resample('D')['sentiment'].mean()
+
+plt.figure(figsize=(10,5))
+daily_sentiment.plot(marker='o')
+plt.title('Average Daily Sentiment Over Time')
+plt.ylabel('Sentiment Polarity')
+plt.xlabel('Date')
+plt.grid(True)
+plt.show()
+
+# 3. Wordcloud for Positive and Negative Posts
+stop_words = set(stopwords.words('english'))
+
+def wordcloud_from_texts(texts, title):
+    combined_text = ' '.join(texts)
+    wordcloud = WordCloud(stopwords=stop_words, background_color='white', width=800, height=400).generate(combined_text)
+    plt.figure(figsize=(10,5))
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.axis('off')
+    plt.title(title)
+    plt.show()
+
+positive_texts = df[df['sentiment_label'] == 'Positive']['clean_text']
+negative_texts = df[df['sentiment_label'] == 'Negative']['clean_text']
+
+wordcloud_from_texts(positive_texts, 'Word Cloud for Positive Sentiment')
+wordcloud_from_texts(negative_texts, 'Word Cloud for Negative Sentiment')
